@@ -83,6 +83,7 @@ nav#tabs button.on{color:var(--main); font-weight:bold;}
 .plan-room.sel rect,.plan-room.sel path,.plan-room.sel polygon{fill:#ffe9c2; stroke:var(--accent);}
 .plan-room text{font-size:11px; fill:#1f2937; pointer-events:none;}
 .plan-room .dim{fill:#6b7280; font-size:9px;}
+.rs-handle{fill:var(--accent); stroke:#fff; stroke-width:2; cursor:nwse-resize;}
 /* ---- 見積プレビュー・印刷 ---- */
 #estPrev{background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; overflow-x:auto;}
 .doc{width:190mm; min-height:266mm; margin:0 auto; background:#fff; color:#111; font-size:10.5pt; padding:8mm 6mm; position:relative;}
@@ -183,7 +184,7 @@ h3.grp{font-size:13px; color:var(--sub); margin:14px 0 6px;}
       <button class="sec" id="btnPlanZoomIn">＋拡大</button>
       <button class="sec" id="btnPlanZoomOut">－縮小</button>
     </div>
-    <p class="muted" style="margin:8px 0 0;">部屋を<b>ダブルクリック（ダブルタップ）で90度回転</b>。またはタップで選択→「⟳回転」でも回ります。ドラッグで移動（グリッドに自動吸着）。この図は見積書に「参考間取り図」として添付できます（🧾見積タブ）。</p>
+    <p class="muted" style="margin:8px 0 0;">部屋を<b>ダブルクリック（ダブルタップ）で90度回転</b>。タップで選択すると<b>右下の●つまみ</b>が出て、ドラッグで寸法変更（5cm刻み・部屋タブの間口/奥行にも反映）。部屋自体のドラッグで移動（グリッドに自動吸着）。この図は見積書に「参考間取り図」として添付できます（🧾見積タブ）。</p>
   </div>
   <div id="planWrap"><svg id="planSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
 </section>
@@ -829,10 +830,12 @@ function planSvgMarkup(forPrint){
     const c = roomCalc(r);
     const label = `${esc(r.name)}`;
     const dimTxt = r.shape==="custom" ? `周囲${f1(c.perim)}m` : `${f1(dm.w)}×${f1(dm.d)}`;
-    return `<g class="plan-room ${planSel===r.id&&!forPrint?"sel":""}" data-plan="${r.id}">
+    const isSel = planSel===r.id && !forPrint;
+    return `<g class="plan-room ${isSel?"sel":""}" data-plan="${r.id}">
       ${shape}
       <text x="${x+w/2}" y="${y+d/2-3}" text-anchor="middle" font-weight="bold">${label}</text>
       <text class="dim" x="${x+w/2}" y="${y+d/2+10}" text-anchor="middle">${dimTxt}　約${f1(c.jo)}帖</text>
+      ${isSel && r.shape!=="custom" ? `<circle class="rs-handle" data-resize="${r.id}" cx="${x+w}" cy="${y+d}" r="${Math.max(9, S*0.2)}"/>` : ""}
     </g>`;
   }).join("");
   return {vb, inner:grid+parts};
@@ -872,7 +875,18 @@ document.getElementById("btnPlanZoomOut").addEventListener("click", ()=>{ planSc
     return {x:p.x/planScale, y:p.y/planScale};
   }
   let lastTap = {id:null, t:0};
+  let resize = null;
   svg.addEventListener("pointerdown", ev=>{
+    const h = ev.target.closest("[data-resize]");
+    if(h){ // 角のつまみ：サイズ変更開始（掴んだ位置と角のズレを補正）
+      const r = site().rooms.find(r=>r.id===h.dataset.resize); if(!r) return;
+      const p = svgPoint(ev);
+      const dm = roomDims(r);
+      resize = {r, offX:(r.gx+dm.w)-p.x, offY:(r.gy+dm.d)-p.y};
+      svg.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+      return;
+    }
     const g = ev.target.closest("[data-plan]");
     if(!g){ planSel=null; lastTap={id:null,t:0}; renderPlan(); return; }
     const r = site().rooms.find(r=>r.id===g.dataset.plan); if(!r) return;
@@ -894,14 +908,28 @@ document.getElementById("btnPlanZoomOut").addEventListener("click", ()=>{ planSc
     ev.preventDefault();
   });
   svg.addEventListener("pointermove", ev=>{
+    if(resize){ // つまみドラッグ＝寸法変更（5cm刻み・最小0.5m）
+      const p = svgPoint(ev);
+      const r = resize.r;
+      const snap = v => Math.max(0.5, Math.round(v/0.05)*0.05);
+      const fw = snap(p.x + resize.offX - r.gx), fd = snap(p.y + resize.offY - r.gy);
+      if(((r.rot||0)%180)!==0){ r.w=+fd.toFixed(2); r.d=+fw.toFixed(2); }
+      else{ r.w=+fw.toFixed(2); r.d=+fd.toFixed(2); }
+      renderPlan();
+      return;
+    }
     if(!drag) return;
     const p = svgPoint(ev);
     drag.r.gx = gSnap(p.x-drag.dx);
     drag.r.gy = gSnap(p.y-drag.dy);
     renderPlan();
   });
-  svg.addEventListener("pointerup", ()=>{ if(drag){ save(); drag=null; } });
-  svg.addEventListener("pointercancel", ()=>{ if(drag){ save(); drag=null; } });
+  const endPointer = ()=>{
+    if(resize){ site().updatedAt=Date.now(); save(); resize=null; }
+    if(drag){ save(); drag=null; }
+  };
+  svg.addEventListener("pointerup", endPointer);
+  svg.addEventListener("pointercancel", endPointer);
 })();
 
 /* ================= 見積 ================= */
