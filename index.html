@@ -94,14 +94,17 @@ nav#tabs button.on{color:var(--main); font-weight:bold;}
 .doc th{background:#eee; font-weight:bold; text-align:center;}
 .doc td.r{text-align:right;} .doc td.c{text-align:center;}
 .doc .note{margin-top:4mm; font-size:9pt; white-space:pre-wrap; border:1px solid #999; padding:2mm; border-radius:2mm;}
-.doc .plan-fig{margin-top:5mm; border:1px solid #999; border-radius:2mm; padding:2mm;}
+.doc tr{break-inside:avoid; page-break-inside:avoid;}
+.doc .note{break-inside:avoid; page-break-inside:avoid;}
+.doc .plan-fig{margin-top:5mm; border:1px solid #999; border-radius:2mm; padding:2mm; break-inside:avoid; page-break-inside:avoid;}
 .doc .plan-fig svg{width:100%; height:auto; max-height:110mm;}
 #printArea{display:none;}
 @media print{
+  html,body{width:auto; margin:0; padding:0; background:#fff;}
   body>*{display:none !important;}
-  body{background:#fff; padding:0;}
-  #printArea{display:block !important;}
-  .doc{width:auto; min-height:0; padding:0; page-break-after:always;}
+  #printArea{display:block !important; width:190mm;}
+  /* A4(210mm)−左右余白20mm＝190mmに常に合わせる（スマホ印刷の縮み対策） */
+  .doc{width:190mm; min-height:0; padding:0; margin:0; page-break-after:always;}
   @page{size:A4 portrait; margin:12mm 10mm;}
 }
 .muted{color:var(--sub); font-size:12px;}
