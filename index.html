@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d7a5f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>クロス見積メーカー｜現場で採寸→自動計算</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{
+  --main:#0d7a5f; --main-dark:#095c47; --accent:#f59e0b;
+  --bg:#f3f6f5; --card:#ffffff; --line:#dde5e2; --txt:#1f2937; --sub:#6b7280;
+  --danger:#dc2626;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0; padding:0;}
+body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif; background:var(--bg); color:var(--txt); font-size:15px; padding-bottom:calc(64px + env(safe-area-inset-bottom));}
+header{position:sticky; top:0; z-index:20; background:var(--main); color:#fff; padding:10px 12px; display:flex; align-items:center; gap:8px; box-shadow:0 1px 4px rgba(0,0,0,.2);}
+header h1{font-size:16px; margin:0; white-space:nowrap;}
+header select{flex:1; min-width:0; border:none; border-radius:8px; padding:7px 8px; font-size:14px; background:#fff;}
+main{max-width:760px; margin:0 auto; padding:12px;}
+section.view{display:none;}
+section.view.active{display:block;}
+.card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.04);}
+.card h2{font-size:15px; margin:0 0 10px; color:var(--main-dark); display:flex; align-items:center; gap:6px;}
+label.fl{display:block; font-size:12px; color:var(--sub); margin:8px 0 3px;}
+input[type=text],input[type=number],input[type=date],textarea,select{width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-size:15px; background:#fff; color:var(--txt);}
+input[type=number]{text-align:right;}
+textarea{resize:vertical;}
+.row{display:flex; gap:8px;}
+.row>*{flex:1; min-width:0;}
+button{font-family:inherit; border:none; border-radius:8px; padding:10px 14px; font-size:14px; cursor:pointer; background:var(--main); color:#fff;}
+button.sec{background:#e6efec; color:var(--main-dark);}
+button.warn{background:#fdecec; color:var(--danger);}
+button.ghost{background:transparent; color:var(--sub); padding:6px;}
+button:active{opacity:.75;}
+.btn-lg{width:100%; padding:13px; font-size:16px; font-weight:bold;}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0;}
+.chips button{padding:7px 10px; font-size:13px; background:#e6efec; color:var(--main-dark); border-radius:999px;}
+/* ---- 部屋カード ---- */
+.room-card{background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:12px; overflow:hidden;}
+.room-head{display:flex; align-items:center; gap:8px; padding:10px 12px; background:#eef5f2; border-bottom:1px solid var(--line);}
+.room-head input{flex:1; font-weight:bold;}
+.room-body{padding:10px 12px;}
+.dim-row{display:flex; gap:6px; align-items:flex-end;}
+.dim-row .fld{flex:1;}
+.dim-row .x{padding-bottom:9px; color:var(--sub);}
+.open-row{background:#f7faf9; border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:6px 0; font-size:13px;}
+.open-row .l1,.open-row .l2{display:flex; align-items:center; gap:6px;}
+.open-row .l2{margin-top:4px; color:var(--sub); font-size:12px;}
+.open-row input.sz{width:64px; padding:7px 4px; font-size:14px; text-align:right;}
+.open-row .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:bold; color:var(--txt);}
+.open-row .oarea{flex:1; text-align:right; color:var(--danger); font-weight:bold; font-size:13px;}
+.side-chips{margin:2px 0 8px 26px;}
+.side-chips button.on{background:var(--main); color:#fff;}
+.stepper{display:flex; align-items:center; gap:2px;}
+.stepper button{padding:4px 9px; font-size:15px; background:#e6efec; color:var(--main-dark);}
+.stepper span{min-width:20px; text-align:center; font-weight:bold;}
+.room-stats{background:#f7faf9; border-top:1px dashed var(--line); padding:8px 12px; font-size:13px; display:flex; flex-wrap:wrap; gap:4px 14px;}
+.room-stats b{color:var(--main-dark);}
+.mat-row{display:flex; align-items:center; gap:8px; margin:6px 0;}
+.mat-row label.ck{display:flex; align-items:center; gap:5px; font-size:14px; white-space:nowrap;}
+.mat-row select{flex:1;}
+/* ---- 合計バー ---- */
+#totalBar{position:fixed; left:0; right:0; bottom:calc(56px + env(safe-area-inset-bottom)); background:var(--main-dark); color:#fff; padding:8px 14px; font-size:13px; display:none; z-index:15;}
+#totalBar.show{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+#totalBar .amt{font-size:17px; font-weight:bold; color:#ffd76e;}
+/* ---- 下タブ ---- */
+nav#tabs{position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); display:flex; z-index:20; padding-bottom:env(safe-area-inset-bottom);}
+nav#tabs button{flex:1; background:none; color:var(--sub); font-size:11px; padding:7px 0 6px; border-radius:0; display:flex; flex-direction:column; align-items:center; gap:1px;}
+nav#tabs button .ic{font-size:20px; line-height:1;}
+nav#tabs button.on{color:var(--main); font-weight:bold;}
+/* ---- 間取り ---- */
+#planWrap{background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; touch-action:none;}
+#planSvg{display:block; width:100%; height:62vh; touch-action:none;}
+.plan-room rect,.plan-room path,.plan-room polygon{fill:#dcefe8; stroke:var(--main); stroke-width:1.5;}
+.plan-room.sel rect,.plan-room.sel path,.plan-room.sel polygon{fill:#ffe9c2; stroke:var(--accent);}
+.plan-room text{font-size:11px; fill:#1f2937; pointer-events:none;}
+.plan-room .dim{fill:#6b7280; font-size:9px;}
+/* ---- 見積プレビュー・印刷 ---- */
+#estPrev{background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; overflow-x:auto;}
+.doc{width:190mm; min-height:266mm; margin:0 auto; background:#fff; color:#111; font-size:10.5pt; padding:8mm 6mm; position:relative;}
+.doc h1{font-size:20pt; text-align:center; letter-spacing:14px; margin:0 0 6mm; border-bottom:2px solid #333; padding-bottom:2mm;}
+.doc .head{display:flex; justify-content:space-between; gap:8mm; margin-bottom:5mm;}
+.doc .to{font-size:13pt; border-bottom:1px solid #333; padding:0 2mm 1mm; min-width:70mm;}
+.doc .co{font-size:9.5pt; text-align:right; line-height:1.6;}
+.doc .total-box{border:2px solid #333; display:inline-block; padding:2mm 6mm; font-size:13pt; font-weight:bold; margin-bottom:4mm;}
+.doc table{width:100%; border-collapse:collapse; font-size:9.5pt;}
+.doc th,.doc td{border:1px solid #666; padding:1.6mm 2mm;}
+.doc th{background:#eee; font-weight:bold; text-align:center;}
+.doc td.r{text-align:right;} .doc td.c{text-align:center;}
+.doc .note{margin-top:4mm; font-size:9pt; white-space:pre-wrap; border:1px solid #999; padding:2mm; border-radius:2mm;}
+.doc .plan-fig{margin-top:5mm; border:1px solid #999; border-radius:2mm; padding:2mm;}
+.doc .plan-fig svg{width:100%; height:auto; max-height:110mm;}
+#printArea{display:none;}
+@media print{
+  body>*{display:none !important;}
+  body{background:#fff; padding:0;}
+  #printArea{display:block !important;}
+  .doc{width:auto; min-height:0; padding:0; page-break-after:always;}
+  @page{size:A4 portrait; margin:12mm 10mm;}
+}
+.muted{color:var(--sub); font-size:12px;}
+.mat-item{display:flex; gap:6px; align-items:center; margin:6px 0;}
+.mat-item input.nm{flex:2;}
+.mat-item input.pr{flex:1;}
+.mat-item select.un{width:74px; flex:none;}
+.mat-item input.wd{width:62px; flex:none;}
+.extra-item{display:flex; gap:6px; align-items:center; margin:6px 0;}
+.extra-item input.nm{flex:2;}
+.extra-item input.q,.extra-item input.pr{flex:1;}
+.extra-item input.un{width:46px; flex:none; text-align:center;}
+.site-item{display:flex; align-items:center; gap:8px; padding:9px 4px; border-bottom:1px solid var(--line); cursor:pointer;}
+.site-item.cur{background:#eef5f2;}
+.site-item .nm{flex:1; min-width:0;}
+.site-item .nm small{display:block; color:var(--sub);}
+h3.grp{font-size:13px; color:var(--sub); margin:14px 0 6px;}
+.seg{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+.seg button{flex:1; background:#fff; color:var(--sub); border-radius:0; padding:8px 4px; font-size:13px;}
+.seg button.on{background:var(--main); color:#fff;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧾クロス見積</h1>
+  <select id="siteSel"></select>
+  <button class="ghost" style="color:#fff;font-size:18px;" id="btnAddSiteTop" title="新規物件">＋</button>
+</header>
+
+<main>
+<!-- ================= 物件 ================= -->
+<section class="view" id="view-site">
+  <div class="card">
+    <h2>🏠 物件情報</h2>
+    <label class="fl">物件名（例：〇〇アパート201号室）</label>
+    <input type="text" id="s-name" data-sf="name" placeholder="物件名">
+    <div class="row">
+      <div><label class="fl">お客様名（宛名）</label><input type="text" id="s-client" data-sf="client" placeholder="株式会社〇〇 様"></div>
+      <div><label class="fl">調査日</label><input type="date" id="s-date" data-sf="date"></div>
+    </div>
+    <label class="fl">住所</label>
+    <input type="text" id="s-addr" data-sf="addr" placeholder="住所">
+    <label class="fl">メモ（下地の状態・注意点など）</label>
+    <textarea id="s-note" data-sf="note" rows="3"></textarea>
+  </div>
+  <div class="card">
+    <h2>📋 物件一覧</h2>
+    <div id="siteList"></div>
+    <div class="row" style="margin-top:10px;">
+      <button id="btnAddSite">＋ 新規物件</button>
+      <button class="sec" id="btnCopySite">⧉ 複製</button>
+      <button class="warn" id="btnDelSite">🗑 削除</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 部屋 ================= -->
+<section class="view" id="view-rooms">
+  <div id="roomList"></div>
+  <div class="chips" id="roomAddChips"></div>
+  <button class="btn-lg" id="btnAddRoom">＋ 部屋を追加</button>
+  <p class="muted" style="margin-top:10px;">💡 寸法はメートル（m）で入力。帖数ボタンで一般的なサイズを一発入力できます。開口部（ドア・窓）を追加すると壁面積から自動控除されます（控除方法は⚙設定）。</p>
+</section>
+
+<!-- ================= 間取り ================= -->
+<section class="view" id="view-plan">
+  <div class="card" style="margin-bottom:8px;">
+    <div class="row">
+      <button class="sec" id="btnRotate">⟳ 回転</button>
+      <button class="sec" id="btnAutoLayout">🧲 自動整列</button>
+      <button class="sec" id="btnPlanZoomIn">＋拡大</button>
+      <button class="sec" id="btnPlanZoomOut">－縮小</button>
+    </div>
+    <p class="muted" style="margin:8px 0 0;">部屋をタップして選択→「⟳回転」で90度ずつ回ります。ドラッグで移動（グリッドに自動吸着）。この図は見積書に「参考間取り図」として添付できます（🧾見積タブ）。</p>
+  </div>
+  <div id="planWrap"><svg id="planSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+</section>
+
+<!-- ================= 見積 ================= -->
+<section class="view" id="view-est">
+  <div class="card">
+    <h2>🧾 見積書の設定</h2>
+    <label class="fl">明細の形式</label>
+    <div class="seg" id="estModeSeg">
+      <button data-mode="room">部屋ごとに明細</button>
+      <button data-mode="sum">材料ごとに集計</button>
+    </div>
+    <h3 class="grp">追加項目（諸経費・処分費など）</h3>
+    <div id="extraList"></div>
+    <div class="chips" id="extraChips"></div>
+    <label class="fl" style="display:flex;align-items:center;gap:6px;margin-top:10px;">
+      <input type="checkbox" id="estPlanCk" style="width:auto;"> 参考間取り図を見積書に添付する
+    </label>
+    <label class="fl">備考</label>
+    <textarea id="s-estNote" data-sf="estNote" rows="3"></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn-lg" id="btnPrint">🖨 見積書を印刷（PDF保存）</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button class="sec" id="btnCsv">📄 明細CSVを保存</button>
+    </div>
+  </div>
+  <div class="card"><h2>👀 プレビュー</h2>
+    <div id="estPrev"></div>
+  </div>
+</section>
+
+<!-- ================= 設定 ================= -->
+<section class="view" id="view-set">
+  <div class="card">
+    <h2>🏢 自社情報（見積書に印字）</h2>
+    <label class="fl">会社名</label><input type="text" data-cf="name" id="c-name">
+    <label class="fl">住所</label><input type="text" data-cf="addr" id="c-addr">
+    <div class="row">
+      <div><label class="fl">TEL</label><input type="text" data-cf="tel" id="c-tel"></div>
+      <div><label class="fl">担当者</label><input type="text" data-cf="person" id="c-person"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>🎨 クロス材料と単価</h2>
+    <div id="matList"></div>
+    <button class="sec" id="btnAddMat" style="margin-top:6px;">＋ 材料を追加</button>
+    <p class="muted" style="margin-top:8px;">単価の単位：㎡＝平米単価 ／ m＝メーター単価（数量はm数に自動換算されます）</p>
+  </div>
+  <div class="card">
+    <h2>🧮 計算の設定</h2>
+    <label class="fl">開口部（ドア・窓）の控除</label>
+    <div class="seg" id="deductSeg">
+      <button data-v="full">全額控除</button>
+      <button data-v="half">半分控除</button>
+      <button data-v="none">控除しない</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div><label class="fl">ロス率（%）</label><input type="number" id="k-loss" data-kf="loss" step="1" min="0"></div>
+      <div><label class="fl">クロス有効幅（m）</label><input type="number" id="k-effW" data-kf="effW" step="0.01" min="0.5"></div>
+      <div><label class="fl">消費税（%）</label><input type="number" id="k-tax" data-kf="tax" step="1" min="0"></div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <div><label class="fl">ソフト巾木 単価（円/m）</label><input type="number" id="k-habaki" data-kf="habakiPrice" step="10" min="0"></div>
+      <div><label class="fl">既定の天井高（m）</label><input type="number" id="k-defH" data-kf="defH" step="0.05" min="1.8"></div>
+    </div>
+    <p class="muted" style="margin-top:8px;">m数換算：面積 ÷ 有効幅 ×（1＋ロス率）。ロス率は柄合わせ・端材分の目安です（無地5〜10%、柄物10〜20%）。</p>
+  </div>
+  <div class="card">
+    <h2>💾 データ</h2>
+    <div class="row">
+      <button class="sec" id="btnExport">⬇ バックアップ保存</button>
+      <button class="sec" id="btnImport">⬆ 読み込み</button>
+    </div>
+    <input type="file" id="importFile" accept=".json" style="display:none;">
+    <p class="muted" style="margin-top:8px;">データはこの端末（ブラウザ）に自動保存されます。機種変更前にバックアップ保存をおすすめします。</p>
+  </div>
+</section>
+</main>
+
+<div id="totalBar"><span id="totalAreas"></span><span class="amt" id="totalAmt"></span></div>
+
+<nav id="tabs">
+  <button data-view="site"><span class="ic">🏠</span>物件</button>
+  <button data-view="rooms"><span class="ic">📐</span>部屋</button>
+  <button data-view="plan"><span class="ic">🗺</span>間取り</button>
+  <button data-view="est"><span class="ic">🧾</span>見積</button>
+  <button data-view="set"><span class="ic">⚙</span>設定</button>
+</nav>
+
+<div id="printArea"></div>
+
+<script>
+"use strict";
+/* ================= データ ================= */
+const LS_KEY = "crossEstData_v1";
+const uid = () => Math.random().toString(36).slice(2, 10);
+const fmt = n => Math.round(n).toLocaleString("ja-JP");
+const f1 = n => (Math.round(n * 10) / 10).toFixed(1);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const OPEN_PRESETS = [
+  {label:"片開きドア", w:0.78, h:2.00, floor:true},
+  {label:"引き戸",     w:1.64, h:2.00, floor:true},
+  {label:"クローゼット", w:1.64, h:2.30, floor:true},
+  {label:"掃き出し窓", w:1.69, h:2.03, floor:true},
+  {label:"腰窓",       w:1.69, h:1.15, floor:false},
+  {label:"小窓",       w:0.60, h:0.90, floor:false},
+  {label:"玄関ドア",   w:0.90, h:2.10, floor:true},
+  {label:"その他",     w:0.80, h:1.00, floor:false},
+];
+const JO_PRESETS = [
+  {label:"4.5帖", w:2.73, d:2.73},
+  {label:"6帖",   w:2.73, d:3.64},
+  {label:"8帖",   w:3.64, d:3.64},
+  {label:"10帖",  w:3.64, d:4.55},
+  {label:"12帖",  w:3.64, d:5.46},
+  {label:"14帖",  w:3.64, d:6.37},
+  {label:"16帖",  w:3.64, d:7.28},
+  {label:"18帖",  w:4.55, d:6.37},
+];
+const ROOM_NAMES = ["洋室","和室","LDK","リビング","キッチン","廊下","玄関","トイレ","洗面所","階段","押入・CL内"];
+const EXTRA_PRESETS = [
+  {name:"廃材処分費", qty:1, unit:"式", price:5000},
+  {name:"養生・家具移動", qty:1, unit:"式", price:5000},
+  {name:"下地補修（パテ処理）", qty:1, unit:"式", price:8000},
+  {name:"駐車場代", qty:1, unit:"式", price:1000},
+  {name:"諸経費", qty:1, unit:"式", price:3000},
+];
+
+function defaultMaterials(){
+  return [
+    {id:uid(), name:"量産クロス張替え", price:1000, unit:"m2"},
+    {id:uid(), name:"1000番クロス張替え", price:1300, unit:"m2"},
+    {id:uid(), name:"クッションフロア張替え", price:2400, unit:"m2", width:1.82},
+    {id:uid(), name:"フロアタイル張替え", price:4500, unit:"m2"},
+  ];
+}
+function floorMatDefault(){
+  const m = DB.settings.materials.find(m=>/フロア|床/.test(m.name)) || DB.settings.materials[0];
+  return m ? m.id : "";
+}
+function newSite(name){
+  return {id:uid(), name:name||"新しい物件", client:"", addr:"", note:"", estNote:"お見積り有効期限：発行より30日\n下地の状態により追加費用が発生する場合があります。",
+    date:new Date().toISOString().slice(0,10), estMode:"room", estPlan:false, rooms:[], extras:[], createdAt:Date.now(), updatedAt:Date.now()};
+}
+function newRoom(name){
+  const s = DB.settings;
+  return {id:uid(), name:name||"洋室", shape:"rect", w:2.73, d:3.64, h:s.calc.defH||2.4,
+    cutW:0.9, cutD:0.9, perim:0, ceilArea:0,
+    wall:true, ceil:true, floor:false, habaki:false, wallSides:null, rot:0,
+    wallMat:s.materials[0]?.id||"", ceilMat:s.materials[0]?.id||"", floorMat:floorMatDefault(),
+    openings:[], gx:null, gy:null};
+}
+let DB = null;
+function load(){
+  try{ DB = JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ DB = null; }
+  if(!DB || !DB.sites){
+    DB = {sites:[newSite("サンプル物件")], currentSiteId:null,
+      settings:{company:{name:"",addr:"",tel:"",person:""}, materials:defaultMaterials(),
+        calc:{deduct:"full", loss:5, effW:0.9, tax:10, habakiPrice:400, defH:2.4}}};
+    DB.currentSiteId = DB.sites[0].id;
+  }
+  if(!DB.settings.calc.defH) DB.settings.calc.defH = 2.4;
+  // v2移行: 床材の追加・部屋への床/面選択フィールド補完
+  if(!DB._v || DB._v < 2){
+    if(!DB.settings.materials.some(m=>/フロア|床/.test(m.name))){
+      DB.settings.materials.push(
+        {id:uid(), name:"クッションフロア張替え", price:2400, unit:"m2", width:1.82},
+        {id:uid(), name:"フロアタイル張替え", price:4500, unit:"m2"});
+    }
+    DB._v = 2;
+  }
+  DB.sites.forEach(s=>s.rooms.forEach(r=>{
+    if(r.floor===undefined) r.floor = false;
+    if(!r.floorMat) r.floorMat = floorMatDefault();
+    if(r.wallSides===undefined) r.wallSides = null;
+    if(r.rot===undefined) r.rot = 0;
+  }));
+}
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }, 250);
+}
+const site = () => DB.sites.find(s=>s.id===DB.currentSiteId) || DB.sites[0];
+const matById = id => DB.settings.materials.find(m=>m.id===id);
+
+/* ================= 計算 ================= */
+function roomCalc(r){
+  const st = DB.settings.calc;
+  let perim, ceilA;
+  const W=+r.w||0, D=+r.d||0, H=+r.h||0;
+  if(r.shape==="custom"){ perim=+r.perim||0; ceilA=+r.ceilArea||0; }
+  else{
+    perim = 2*(W+D); ceilA = W*D;
+    if(r.shape==="L") ceilA = Math.max(0, ceilA - (+r.cutW||0)*(+r.cutD||0));
+  }
+  let openA=0, doorW=0;
+  (r.openings||[]).forEach(o=>{
+    const n=o.count||1;
+    openA += (+o.w||0)*(+o.h||0)*n;
+    if(o.floor) doorW += (+o.w||0)*n;
+  });
+  const ded = st.deduct==="none"?0 : st.deduct==="half"?0.5 : 1;
+  // 壁の面選択（四角/L型のみ）：wallSides=[間口①,間口②,奥行①,奥行②] / null=全面
+  let wallLen = perim, sideCnt = 4, sideSel = false;
+  if(r.shape!=="custom" && Array.isArray(r.wallSides)){
+    const sides = [W, W, D, D];
+    wallLen = sides.reduce((t,len,i)=> t + (r.wallSides[i]?len:0), 0);
+    sideCnt = r.wallSides.filter(Boolean).length;
+    sideSel = true;
+  }
+  const wallA = r.wall ? Math.max(0, wallLen*H - openA*ded) : 0;
+  const cA = r.ceil ? ceilA : 0;
+  const fA = r.floor ? ceilA : 0;
+  const habakiM = r.habaki ? Math.max(0, wallLen - doorW) : 0;
+  const toM = a => a>0 ? a/(st.effW||0.9)*(1+ (st.loss||0)/100) : 0;
+  return {perim, wallLen, sideCnt, sideSel, wallA, ceilA:cA, floorA:fA, ceilRaw:ceilA, openA, habakiM,
+    wallM:toM(wallA), ceilM:toM(cA), jo:ceilA/1.62};
+}
+function matAmount(matId, area){
+  const m = matById(matId);
+  if(!m) return {qty:area, unit:"㎡", price:0, amt:0, name:"（材料未設定）"};
+  const st = DB.settings.calc;
+  const isM = m.unit==="m";
+  const qty = isM ? area/((+m.width||st.effW||0.9))*(1+(st.loss||0)/100) : area;
+  return {qty, unit:isM?"m":"㎡", price:+m.price||0, amt:Math.round(qty*(+m.price||0)), name:m.name};
+}
+function buildRows(s){
+  const rows = [];
+  const st = DB.settings.calc;
+  if(s.estMode==="sum"){
+    const agg = {}; // matId -> {area}
+    s.rooms.forEach(r=>{
+      const c = roomCalc(r);
+      if(c.wallA>0)  (agg[r.wallMat]=agg[r.wallMat]||{area:0}).area += c.wallA;
+      if(c.ceilA>0)  (agg[r.ceilMat]=agg[r.ceilMat]||{area:0}).area += c.ceilA;
+      if(c.floorA>0) (agg[r.floorMat]=agg[r.floorMat]||{area:0}).area += c.floorA;
+    });
+    Object.entries(agg).forEach(([id,v])=>{
+      const a = matAmount(id, v.area);
+      rows.push({name:a.name, spec:`計 ${f1(v.area)}㎡`, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt});
+    });
+  }else{
+    s.rooms.forEach(r=>{
+      const c = roomCalc(r);
+      if(c.wallA>0){ const a=matAmount(r.wallMat,c.wallA);
+        const side = c.sideSel ? `（${c.sideCnt}面のみ）` : "";
+        rows.push({name:`${r.name}　壁${side}`, spec:a.name, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt}); }
+      if(c.ceilA>0){ const a=matAmount(r.ceilMat,c.ceilA);
+        rows.push({name:`${r.name}　天井`, spec:a.name, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt}); }
+      if(c.floorA>0){ const a=matAmount(r.floorMat,c.floorA);
+        rows.push({name:`${r.name}　床`, spec:a.name, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt}); }
+    });
+  }
+  const habakiTotal = s.rooms.reduce((t,r)=>t+roomCalc(r).habakiM, 0);
+  if(habakiTotal>0){
+    rows.push({name:"ソフト巾木張替え", spec:"", qty:habakiTotal, unit:"m", price:st.habakiPrice||0, amt:Math.round(habakiTotal*(st.habakiPrice||0))});
+  }
+  (s.extras||[]).forEach(x=>{
+    rows.push({name:x.name, spec:"", qty:+x.qty||0, unit:x.unit||"式", price:+x.price||0, amt:Math.round((+x.qty||0)*(+x.price||0))});
+  });
+  const sub = rows.reduce((t,r)=>t+r.amt,0);
+  const tax = Math.floor(sub*(st.tax||0)/100);
+  return {rows, sub, tax, total:sub+tax};
+}
+function siteTotals(s){
+  let wall=0, ceil=0, floor=0;
+  s.rooms.forEach(r=>{ const c=roomCalc(r); wall+=c.wallA; ceil+=c.ceilA; floor+=c.floorA; });
+  const b = buildRows(s);
+  return {wall, ceil, floor, total:b.total};
+}
+
+/* ================= ビュー切替 ================= */
+let curView = "rooms";
+function showView(v){
+  curView = v;
+  document.querySelectorAll("section.view").forEach(el=>el.classList.toggle("active", el.id==="view-"+v));
+  document.querySelectorAll("nav#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.view===v));
+  document.getElementById("totalBar").classList.toggle("show", v==="rooms");
+  if(v==="site") renderSite();
+  if(v==="rooms"){ renderRooms(); updateTotalBar(); }
+  if(v==="plan") renderPlan();
+  if(v==="est") renderEst();
+  if(v==="set") renderSettings();
+}
+document.querySelectorAll("nav#tabs button").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.view)));
+
+/* ================= 物件 ================= */
+function renderSiteSel(){
+  const sel = document.getElementById("siteSel");
+  sel.innerHTML = DB.sites.map(s=>`<option value="${s.id}" ${s.id===DB.currentSiteId?"selected":""}>${esc(s.name)}</option>`).join("");
+}
+document.getElementById("siteSel").addEventListener("change", e=>{
+  DB.currentSiteId = e.target.value; save(); showView(curView); renderSiteSel();
+});
+function renderSite(){
+  const s = site();
+  ["name","client","addr","note","date"].forEach(f=>{ document.getElementById("s-"+f).value = s[f]||""; });
+  const list = document.getElementById("siteList");
+  list.innerHTML = DB.sites.slice().sort((a,b)=>b.updatedAt-a.updatedAt).map(s2=>{
+    const t = siteTotals(s2);
+    return `<div class="site-item ${s2.id===DB.currentSiteId?"cur":""}" data-sid="${s2.id}">
+      <div class="nm"><b>${esc(s2.name)}</b><small>${esc(s2.date||"")}　部屋${s2.rooms.length}　¥${fmt(t.total)}</small></div>
+      ${s2.id===DB.currentSiteId?"✅":""}</div>`;
+  }).join("") || `<p class="muted">物件がありません</p>`;
+  list.querySelectorAll(".site-item").forEach(el=>el.addEventListener("click",()=>{
+    DB.currentSiteId = el.dataset.sid; save(); renderSiteSel(); renderSite();
+  }));
+}
+document.querySelectorAll("[data-sf]").forEach(inp=>inp.addEventListener("input",()=>{
+  site()[inp.dataset.sf] = inp.value; site().updatedAt=Date.now(); save();
+  if(inp.dataset.sf==="name") renderSiteSel();
+}));
+function addSite(){
+  const s = newSite("物件" + (DB.sites.length+1));
+  DB.sites.push(s); DB.currentSiteId=s.id; save(); renderSiteSel(); showView("site");
+  document.getElementById("s-name").focus();
+}
+document.getElementById("btnAddSite").addEventListener("click", addSite);
+document.getElementById("btnAddSiteTop").addEventListener("click", addSite);
+document.getElementById("btnCopySite").addEventListener("click", ()=>{
+  const s = JSON.parse(JSON.stringify(site()));
+  s.id=uid(); s.name=s.name+"（複製）"; s.createdAt=s.updatedAt=Date.now();
+  s.rooms.forEach(r=>{ r.id=uid(); (r.openings||[]).forEach(o=>o.id=uid()); });
+  DB.sites.push(s); DB.currentSiteId=s.id; save(); renderSiteSel(); renderSite();
+});
+document.getElementById("btnDelSite").addEventListener("click", ()=>{
+  if(DB.sites.length<=1){ alert("最後の物件は削除できません"); return; }
+  if(!confirm(`「${site().name}」を削除しますか？`)) return;
+  DB.sites = DB.sites.filter(s=>s.id!==DB.currentSiteId);
+  DB.currentSiteId = DB.sites[0].id; save(); renderSiteSel(); renderSite();
+});
+
+/* ================= 部屋 ================= */
+function roomStatsHtml(r){
+  const c = roomCalc(r);
+  const parts = [];
+  parts.push(`周囲 <b>${f1(c.perim)}m</b>`);
+  if(r.wall){
+    const side = c.sideSel ? `${c.sideCnt}面 ${f1(c.wallLen)}m分` : "";
+    parts.push(`壁${side?`<span class="muted">（${side}）</span>`:""} <b>${f1(c.wallA)}㎡</b>（${f1(c.wallM)}m）`);
+  }
+  if(r.ceil) parts.push(`天井 <b>${f1(c.ceilA)}㎡</b>`);
+  if(r.floor) parts.push(`床 <b>${f1(c.floorA)}㎡</b>`);
+  if(c.openA>0) parts.push(`開口 ${f1(c.openA)}㎡`);
+  if(r.habaki) parts.push(`巾木 <b>${f1(c.habakiM)}m</b>`);
+  if(r.shape!=="custom") parts.push(`約${f1(c.jo)}帖`);
+  return parts.join("　");
+}
+function oareaText(o){
+  const st = DB.settings.calc;
+  if(st.deduct==="none") return "控除なし設定";
+  const a = (+o.w||0)*(+o.h||0)*(o.count||1);
+  const ded = st.deduct==="half"?0.5:1;
+  return `−${f1(a*ded)}㎡${st.deduct==="half"?"（半分控除）":""}`;
+}
+function matSelHtml(sel){
+  return DB.settings.materials.map(m=>`<option value="${m.id}" ${m.id===sel?"selected":""}>${esc(m.name)}</option>`).join("");
+}
+function renderRooms(){
+  const s = site();
+  const list = document.getElementById("roomList");
+  list.innerHTML = s.rooms.map((r,i)=>{
+    const openRows = (r.openings||[]).map(o=>`
+      <div class="open-row" data-oid="${o.id}">
+        <div class="l1">
+          <span class="nm">${o.floor?"🚪":"🪟"}${esc(o.label)}</span>
+          <span class="stepper">
+            <button data-act="odec" data-rid="${r.id}" data-oid="${o.id}">－</button><span>${o.count||1}ヶ所</span><button data-act="oinc" data-rid="${r.id}" data-oid="${o.id}">＋</button>
+          </span>
+          <button class="ghost" data-act="odel" data-rid="${r.id}" data-oid="${o.id}">✕</button>
+        </div>
+        <div class="l2">
+          幅<input class="sz" type="number" step="0.01" inputmode="decimal" value="${o.w}" data-rid="${r.id}" data-oid="${o.id}" data-of="w">m ×
+          高さ<input class="sz" type="number" step="0.01" inputmode="decimal" value="${o.h}" data-rid="${r.id}" data-oid="${o.id}" data-of="h">m
+          <span class="oarea" id="oarea-${o.id}">${oareaText(o)}</span>
+        </div>
+      </div>`).join("");
+    const openChips = OPEN_PRESETS.map((p,pi)=>`<button data-act="oadd" data-rid="${r.id}" data-pi="${pi}">＋${p.label}</button>`).join("");
+    const joChips = JO_PRESETS.map((p,pi)=>`<button data-act="jo" data-rid="${r.id}" data-pi="${pi}">${p.label}</button>`).join("");
+    const shapeSeg = ["rect","L","custom"].map(sh=>{
+      const lab = sh==="rect"?"四角":sh==="L"?"L型":"直接入力";
+      return `<button data-act="shape" data-rid="${r.id}" data-v="${sh}" class="${r.shape===sh?"on":""}">${lab}</button>`;
+    }).join("");
+    let dims = "";
+    if(r.shape==="custom"){
+      dims = `<div class="dim-row">
+        <div class="fld"><label class="fl">壁の周囲長（m）</label><input type="number" inputmode="decimal" step="0.1" value="${r.perim}" data-rid="${r.id}" data-rf="perim"></div>
+        <div class="fld"><label class="fl">天井面積（㎡）</label><input type="number" inputmode="decimal" step="0.1" value="${r.ceilArea}" data-rid="${r.id}" data-rf="ceilArea"></div>
+        <div class="fld"><label class="fl">天井高（m）</label><input type="number" inputmode="decimal" step="0.05" value="${r.h}" data-rid="${r.id}" data-rf="h"></div>
+      </div>`;
+    }else{
+      dims = `<div class="dim-row">
+        <div class="fld"><label class="fl">間口（m）</label><input type="number" inputmode="decimal" step="0.01" value="${r.w}" data-rid="${r.id}" data-rf="w"></div>
+        <span class="x">×</span>
+        <div class="fld"><label class="fl">奥行（m）</label><input type="number" inputmode="decimal" step="0.01" value="${r.d}" data-rid="${r.id}" data-rf="d"></div>
+        <span class="x">×</span>
+        <div class="fld"><label class="fl">天井高（m）</label><input type="number" inputmode="decimal" step="0.05" value="${r.h}" data-rid="${r.id}" data-rf="h"></div>
+      </div>
+      <div class="chips">${joChips}</div>`;
+      if(r.shape==="L"){
+        dims += `<div class="dim-row">
+          <div class="fld"><label class="fl">切欠き 幅（m）</label><input type="number" inputmode="decimal" step="0.01" value="${r.cutW}" data-rid="${r.id}" data-rf="cutW"></div>
+          <span class="x">×</span>
+          <div class="fld"><label class="fl">切欠き 奥行（m）</label><input type="number" inputmode="decimal" step="0.01" value="${r.cutD}" data-rid="${r.id}" data-rf="cutD"></div>
+          <span class="x" style="flex:1;"></span>
+        </div>`;
+      }
+    }
+    return `<div class="room-card" data-rid="${r.id}">
+      <div class="room-head">
+        <input type="text" value="${esc(r.name)}" list="roomNames" data-rid="${r.id}" data-rf="name">
+        <button class="ghost" data-act="rup" data-rid="${r.id}">▲</button>
+        <button class="ghost" data-act="rcopy" data-rid="${r.id}">⧉</button>
+        <button class="ghost" style="color:var(--danger)" data-act="rdel" data-rid="${r.id}">🗑</button>
+      </div>
+      <div class="room-body">
+        <div class="seg" style="margin-bottom:4px;">${shapeSeg}</div>
+        ${dims}
+        <h3 class="grp">開口部（ドア・窓）</h3>
+        ${openRows || ""}
+        <div class="chips">${openChips}</div>
+        <h3 class="grp">施工範囲・材料</h3>
+        <div class="mat-row">
+          <label class="ck"><input type="checkbox" ${r.wall?"checked":""} data-rid="${r.id}" data-rf="wall"> 壁</label>
+          <select data-rid="${r.id}" data-rf="wallMat">${matSelHtml(r.wallMat)}</select>
+        </div>
+        ${r.wall && r.shape!=="custom" ? (()=>{
+          const sides = [ {lab:"間口①", len:+r.w||0}, {lab:"間口②", len:+r.w||0}, {lab:"奥行①", len:+r.d||0}, {lab:"奥行②", len:+r.d||0} ];
+          const all = !Array.isArray(r.wallSides);
+          return `<div class="chips side-chips">
+            <button data-act="sideall" data-rid="${r.id}" class="${all?"on":""}">全面</button>
+            ${sides.map((sd,i)=>`<button data-act="side" data-rid="${r.id}" data-i="${i}" class="${!all&&r.wallSides[i]?"on":""}">${sd.lab} ${f1(sd.len)}m</button>`).join("")}
+          </div>${all?"":`<p class="muted" style="margin:0 0 8px 26px;">※開口部（ドア・窓）は選んだ面にある分だけ入力してください</p>`}`;
+        })() : ""}
+        <div class="mat-row">
+          <label class="ck"><input type="checkbox" ${r.ceil?"checked":""} data-rid="${r.id}" data-rf="ceil"> 天井</label>
+          <select data-rid="${r.id}" data-rf="ceilMat">${matSelHtml(r.ceilMat)}</select>
+        </div>
+        <div class="mat-row">
+          <label class="ck"><input type="checkbox" ${r.floor?"checked":""} data-rid="${r.id}" data-rf="floor"> 床</label>
+          <select data-rid="${r.id}" data-rf="floorMat">${matSelHtml(r.floorMat)}</select>
+        </div>
+        <div class="mat-row">
+          <label class="ck"><input type="checkbox" ${r.habaki?"checked":""} data-rid="${r.id}" data-rf="habaki"> ソフト巾木も張替え</label>
+        </div>
+      </div>
+      <div class="room-stats" id="stats-${r.id}">${roomStatsHtml(r)}</div>
+    </div>`;
+  }).join("") || `<div class="card"><p class="muted" style="margin:0;">まだ部屋がありません。下のボタンから追加してください。</p></div>`;
+  const chips = document.getElementById("roomAddChips");
+  chips.innerHTML = ROOM_NAMES.map(n=>`<button data-act="raddname" data-v="${esc(n)}">＋${esc(n)}</button>`).join("");
+}
+document.getElementById("btnAddRoom").addEventListener("click", ()=>{ addRoom(); });
+function addRoom(name){
+  const s = site();
+  s.rooms.push(newRoom(name)); s.updatedAt=Date.now(); save();
+  renderRooms(); updateTotalBar();
+  const cards = document.querySelectorAll(".room-card");
+  cards[cards.length-1]?.scrollIntoView({behavior:"smooth", block:"center"});
+}
+function updateTotalBar(){
+  const t = siteTotals(site());
+  document.getElementById("totalAreas").textContent =
+    `壁 ${f1(t.wall)}㎡ ／ 天井 ${f1(t.ceil)}㎡` + (t.floor>0 ? ` ／ 床 ${f1(t.floor)}㎡` : "");
+  document.getElementById("totalAmt").textContent = `税込 ¥${fmt(t.total)}`;
+}
+/* 入力の委譲 */
+document.getElementById("view-rooms").addEventListener("input", e=>{
+  const t = e.target;
+  const s = site();
+  if(t.dataset.of){ // 開口部
+    const r = s.rooms.find(r=>r.id===t.dataset.rid); if(!r) return;
+    const o = r.openings.find(o=>o.id===t.dataset.oid); if(!o) return;
+    o[t.dataset.of] = parseFloat(t.value)||0;
+    const sp = document.getElementById("oarea-"+o.id);
+    if(sp) sp.textContent = oareaText(o);
+  }else if(t.dataset.rf){
+    const r = s.rooms.find(r=>r.id===t.dataset.rid); if(!r) return;
+    const f = t.dataset.rf;
+    if(t.type==="checkbox") r[f]=t.checked;
+    else if(t.type==="number") r[f]=parseFloat(t.value)||0;
+    else r[f]=t.value;
+  }else return;
+  s.updatedAt=Date.now(); save();
+  const rid = t.dataset.rid;
+  const r = s.rooms.find(r=>r.id===rid);
+  const st = document.getElementById("stats-"+rid);
+  if(st&&r) st.innerHTML = roomStatsHtml(r);
+  updateTotalBar();
+});
+document.getElementById("view-rooms").addEventListener("change", e=>{
+  const t = e.target;
+  if(t.tagName==="SELECT" && t.dataset.rf){
+    const r = site().rooms.find(r=>r.id===t.dataset.rid); if(!r) return;
+    r[t.dataset.rf]=t.value; site().updatedAt=Date.now(); save(); updateTotalBar();
+  }
+});
+document.getElementById("view-rooms").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-act]"); if(!b) return;
+  const s = site();
+  const act = b.dataset.act;
+  const r = s.rooms.find(r=>r.id===b.dataset.rid);
+  if(act==="raddname"){ addRoom(b.dataset.v); return; }
+  if(!r && act!=="raddname") return;
+  if(act==="rdel"){ if(!confirm(`「${r.name}」を削除しますか？`))return; s.rooms=s.rooms.filter(x=>x.id!==r.id); }
+  else if(act==="rcopy"){ const c=JSON.parse(JSON.stringify(r)); c.id=uid(); c.name=r.name+"②"; c.gx=null;c.gy=null; c.openings.forEach(o=>o.id=uid()); s.rooms.splice(s.rooms.indexOf(r)+1,0,c); }
+  else if(act==="rup"){ const i=s.rooms.indexOf(r); if(i>0){ s.rooms.splice(i,1); s.rooms.splice(i-1,0,r);} }
+  else if(act==="shape"){ r.shape=b.dataset.v; }
+  else if(act==="sideall"){ r.wallSides=null; }
+  else if(act==="side"){
+    const i=+b.dataset.i;
+    if(!Array.isArray(r.wallSides)){ // 全面→タップした面だけ選択
+      r.wallSides=[false,false,false,false]; r.wallSides[i]=true;
+    }else{
+      r.wallSides[i]=!r.wallSides[i];
+      if(r.wallSides.every(Boolean)) r.wallSides=null; // 4面すべて→全面に戻す
+    }
+  }
+  else if(act==="jo"){ const p=JO_PRESETS[+b.dataset.pi]; r.w=p.w; r.d=p.d; }
+  else if(act==="oadd"){ const p=OPEN_PRESETS[+b.dataset.pi]; r.openings.push({id:uid(), label:p.label, w:p.w, h:p.h, count:1, floor:p.floor}); }
+  else if(act==="odel"){ r.openings=r.openings.filter(o=>o.id!==b.dataset.oid); }
+  else if(act==="oinc"||act==="odec"){ const o=r.openings.find(o=>o.id===b.dataset.oid); if(o){ o.count=Math.max(1,(o.count||1)+(act==="oinc"?1:-1)); } }
+  s.updatedAt=Date.now(); save(); renderRooms(); updateTotalBar();
+});
+
+/* ================= 間取り ================= */
+let planScale = 34; // px per m
+let planSel = null;
+const GRID = 0.455; // 尺モジュール半間の1/2（2.73m・3.64m等がぴったり乗る）
+const gSnap = v => Math.round(v/GRID)*GRID;
+function ensurePos(){
+  const s = site();
+  let x=GRID, y=GRID, rowH=0, maxW=13;
+  s.rooms.forEach(r=>{
+    if(r.gx==null||r.gy==null){
+      const c = roomCalc(r);
+      const w = r.shape==="custom" ? Math.sqrt(c.ceilRaw||4) : (+r.w||2);
+      const d = r.shape==="custom" ? Math.sqrt(c.ceilRaw||4) : (+r.d||2);
+      if(x + w > maxW){ x=GRID; y=gSnap(y+rowH)+GRID; rowH=0; }
+      r.gx=gSnap(x); r.gy=gSnap(y); x=gSnap(x+w)+GRID; rowH=Math.max(rowH,d);
+    }
+  });
+}
+function roomDims(r){
+  const c = roomCalc(r);
+  if(r.shape==="custom"){ const sq=Math.max(1,Math.sqrt(c.ceilRaw||4)); return {w:sq,d:sq,est:true}; }
+  let w=+r.w||1, d=+r.d||1;
+  if(((r.rot||0)%180)!==0) [w,d]=[d,w]; // 90/270度は縦横入替
+  return {w, d, est:false};
+}
+function planSvgMarkup(forPrint){
+  const s = site();
+  ensurePos();
+  const S = planScale;
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  s.rooms.forEach(r=>{ const dm=roomDims(r);
+    minX=Math.min(minX,r.gx); minY=Math.min(minY,r.gy);
+    maxX=Math.max(maxX,r.gx+dm.w); maxY=Math.max(maxY,r.gy+dm.d); });
+  if(s.rooms.length===0){ minX=0;minY=0;maxX=10;maxY=6; }
+  const pad=0.91;
+  const vb = [ (minX-pad)*S, (minY-pad)*S, (maxX-minX+pad*2)*S, (maxY-minY+pad*2)*S ];
+  // グリッド線（画面のみ）：0.455m間隔・0.91mごとに濃く
+  let grid = "";
+  if(!forPrint){
+    const step = GRID*S;
+    const x0=vb[0], y0=vb[1], x1=vb[0]+vb[2], y1=vb[1]+vb[3];
+    for(let gx=Math.floor(x0/step)*step; gx<=x1; gx+=step){
+      const major = Math.abs(Math.round(gx/step))%2===0;
+      grid += `<line x1="${gx}" y1="${y0}" x2="${gx}" y2="${y1}" stroke="${major?"#c9dcd5":"#e7efec"}" vector-effect="non-scaling-stroke"/>`;
+    }
+    for(let gy=Math.floor(y0/step)*step; gy<=y1; gy+=step){
+      const major = Math.abs(Math.round(gy/step))%2===0;
+      grid += `<line x1="${x0}" y1="${gy}" x2="${x1}" y2="${gy}" stroke="${major?"#c9dcd5":"#e7efec"}" vector-effect="non-scaling-stroke"/>`;
+    }
+  }
+  const parts = s.rooms.map(r=>{
+    const dm = roomDims(r);
+    const x=r.gx*S, y=r.gy*S, w=dm.w*S, d=dm.d*S;
+    let shape;
+    if(r.shape==="L"){
+      // 元の形（切欠き右上）を回転してポリゴン化
+      const W0=+r.w||1, D0=+r.d||1;
+      const cw=Math.min(W0-0.1,+r.cutW||0), cd=Math.min(D0-0.1,+r.cutD||0);
+      const rot=(((r.rot||0)%360)+360)%360;
+      let pts=[[0,0],[W0-cw,0],[W0-cw,cd],[W0,cd],[W0,D0],[0,D0]];
+      pts = pts.map(([px,py])=>{
+        if(rot===90)  return [D0-py, px];
+        if(rot===180) return [W0-px, D0-py];
+        if(rot===270) return [py, W0-px];
+        return [px,py];
+      });
+      shape = `<polygon points="${pts.map(p=>`${(r.gx+p[0])*S},${(r.gy+p[1])*S}`).join(" ")}"/>`;
+    }else{
+      shape = `<rect x="${x}" y="${y}" width="${w}" height="${d}" ${dm.est?'stroke-dasharray="5,4"':""}/>`;
+    }
+    const c = roomCalc(r);
+    const label = `${esc(r.name)}`;
+    const dimTxt = r.shape==="custom" ? `周囲${f1(c.perim)}m` : `${f1(dm.w)}×${f1(dm.d)}`;
+    return `<g class="plan-room ${planSel===r.id&&!forPrint?"sel":""}" data-plan="${r.id}">
+      ${shape}
+      <text x="${x+w/2}" y="${y+d/2-3}" text-anchor="middle" font-weight="bold">${label}</text>
+      <text class="dim" x="${x+w/2}" y="${y+d/2+10}" text-anchor="middle">${dimTxt}　約${f1(c.jo)}帖</text>
+    </g>`;
+  }).join("");
+  return {vb, inner:grid+parts};
+}
+function renderPlan(){
+  const svg = document.getElementById("planSvg");
+  const m = planSvgMarkup(false);
+  svg.setAttribute("viewBox", m.vb.join(" "));
+  svg.innerHTML = m.inner;
+}
+document.getElementById("btnRotate").addEventListener("click", ()=>{
+  const r = site().rooms.find(r=>r.id===planSel);
+  if(!r){ alert("回転したい部屋を先にタップで選択してください"); return; }
+  r.rot = ((r.rot||0)+90)%360;
+  save(); renderPlan();
+});
+document.getElementById("btnAutoLayout").addEventListener("click", ()=>{
+  site().rooms.forEach(r=>{ r.gx=null; r.gy=null; }); save(); renderPlan();
+});
+document.getElementById("btnPlanZoomIn").addEventListener("click", ()=>{ planScale=Math.min(80,planScale*1.25); renderPlan(); });
+document.getElementById("btnPlanZoomOut").addEventListener("click", ()=>{ planScale=Math.max(12,planScale/1.25); renderPlan(); });
+(function(){
+  const svg = document.getElementById("planSvg");
+  let drag = null;
+  function svgPoint(ev){
+    const pt = svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY;
+    const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return {x:p.x/planScale, y:p.y/planScale};
+  }
+  svg.addEventListener("pointerdown", ev=>{
+    const g = ev.target.closest("[data-plan]");
+    if(!g){ planSel=null; renderPlan(); return; }
+    const r = site().rooms.find(r=>r.id===g.dataset.plan); if(!r) return;
+    planSel = r.id;
+    const p = svgPoint(ev);
+    drag = {r, dx:p.x-r.gx, dy:p.y-r.gy};
+    svg.setPointerCapture(ev.pointerId);
+    renderPlan();
+    ev.preventDefault();
+  });
+  svg.addEventListener("pointermove", ev=>{
+    if(!drag) return;
+    const p = svgPoint(ev);
+    drag.r.gx = gSnap(p.x-drag.dx);
+    drag.r.gy = gSnap(p.y-drag.dy);
+    renderPlan();
+  });
+  svg.addEventListener("pointerup", ()=>{ if(drag){ save(); drag=null; } });
+  svg.addEventListener("pointercancel", ()=>{ if(drag){ save(); drag=null; } });
+})();
+
+/* ================= 見積 ================= */
+function renderEst(){
+  const s = site();
+  document.querySelectorAll("#estModeSeg button").forEach(b=>b.classList.toggle("on", b.dataset.mode===(s.estMode||"room")));
+  document.getElementById("estPlanCk").checked = !!s.estPlan;
+  document.getElementById("s-estNote").value = s.estNote||"";
+  const list = document.getElementById("extraList");
+  list.innerHTML = (s.extras||[]).map(x=>`
+    <div class="extra-item" data-xid="${x.id}">
+      <input class="nm" type="text" value="${esc(x.name)}" data-xf="name" data-xid="${x.id}">
+      <input class="q" type="number" step="1" value="${x.qty}" data-xf="qty" data-xid="${x.id}">
+      <input class="un" type="text" value="${esc(x.unit)}" data-xf="unit" data-xid="${x.id}">
+      <input class="pr" type="number" step="100" value="${x.price}" data-xf="price" data-xid="${x.id}">
+      <button class="ghost" data-xdel="${x.id}">✕</button>
+    </div>`).join("");
+  document.getElementById("extraChips").innerHTML =
+    EXTRA_PRESETS.map((p,i)=>`<button data-xadd="${i}">＋${esc(p.name)}</button>`).join("") +
+    `<button data-xadd="-1">＋自由入力</button>`;
+  renderEstPrev();
+}
+function estDocHtml(withPlan){
+  const s = site();
+  const co = DB.settings.company;
+  const b = buildRows(s);
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日`;
+  const rowsHtml = b.rows.map((r,i)=>`<tr>
+    <td class="c">${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.spec||"")}</td>
+    <td class="r">${r.unit==="式"?fmt(r.qty):f1(r.qty)}</td><td class="c">${esc(r.unit)}</td>
+    <td class="r">${fmt(r.price)}</td><td class="r">${fmt(r.amt)}</td></tr>`).join("");
+  let planFig = "";
+  if(withPlan && s.rooms.length){
+    const m = planSvgMarkup(true);
+    planFig = `<div class="plan-fig"><div style="font-size:9pt;font-weight:bold;margin-bottom:1mm;">参考間取り図（略図）</div>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="${m.vb.join(" ")}">
+      <style>.plan-room rect,.plan-room path,.plan-room polygon{fill:#eef5f2;stroke:#333;stroke-width:1.2;}.plan-room text{font-size:11px;fill:#111;}.plan-room .dim{font-size:9px;fill:#555;}</style>
+      ${m.inner}</svg></div>`;
+  }
+  return `<div class="doc">
+    <h1>御見積書</h1>
+    <div class="head">
+      <div>
+        <div class="to">${esc(s.client||"　")}　様</div>
+        <div style="margin-top:3mm;font-size:9.5pt;">
+          件名：${esc(s.name)}　クロス張替え工事<br>
+          ${s.addr?`工事場所：${esc(s.addr)}<br>`:""}
+          発行日：${dateStr}
+        </div>
+        <div style="margin-top:4mm;">下記の通りお見積り申し上げます。</div>
+        <div class="total-box">御見積金額　¥${fmt(b.total)} −（税込）</div>
+      </div>
+      <div class="co">
+        <b style="font-size:11pt;">${esc(co.name||"")}</b><br>
+        ${esc(co.addr||"")}<br>
+        ${co.tel?`TEL：${esc(co.tel)}<br>`:""}
+        ${co.person?`担当：${esc(co.person)}`:""}
+      </div>
+    </div>
+    <table>
+      <tr><th style="width:8mm;">No</th><th>項目</th><th>仕様</th><th style="width:16mm;">数量</th><th style="width:10mm;">単位</th><th style="width:18mm;">単価</th><th style="width:22mm;">金額</th></tr>
+      ${rowsHtml || `<tr><td colspan="7" class="c">明細がありません（部屋を入力してください）</td></tr>`}
+      <tr><td colspan="6" class="r" style="font-weight:bold;">小計</td><td class="r">${fmt(b.sub)}</td></tr>
+      <tr><td colspan="6" class="r">消費税（${DB.settings.calc.tax}%）</td><td class="r">${fmt(b.tax)}</td></tr>
+      <tr><td colspan="6" class="r" style="font-weight:bold;">合計（税込）</td><td class="r" style="font-weight:bold;">${fmt(b.total)}</td></tr>
+    </table>
+    ${s.estNote?`<div class="note">${esc(s.estNote)}</div>`:""}
+    ${planFig}
+  </div>`;
+}
+function renderEstPrev(){
+  const prev = document.getElementById("estPrev");
+  prev.innerHTML = `<div style="transform:scale(.48); transform-origin:top left; width:208%;">${estDocHtml(site().estPlan)}</div>`;
+}
+document.getElementById("estModeSeg").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-mode]"); if(!b) return;
+  site().estMode = b.dataset.mode; save(); renderEst();
+});
+document.getElementById("estPlanCk").addEventListener("change", e=>{
+  site().estPlan = e.target.checked; save(); renderEstPrev();
+});
+document.getElementById("view-est").addEventListener("input", e=>{
+  const t = e.target;
+  if(t.dataset.xf){
+    const x = (site().extras||[]).find(x=>x.id===t.dataset.xid); if(!x) return;
+    x[t.dataset.xf] = t.type==="number" ? (parseFloat(t.value)||0) : t.value;
+    save(); renderEstPrev();
+  }
+  if(t.id==="s-estNote"){ renderEstPrev(); }
+});
+document.getElementById("view-est").addEventListener("click", e=>{
+  const del = e.target.closest("[data-xdel]");
+  if(del){ site().extras = site().extras.filter(x=>x.id!==del.dataset.xdel); save(); renderEst(); return; }
+  const add = e.target.closest("[data-xadd]");
+  if(add){
+    const i = +add.dataset.xadd;
+    const p = i>=0 ? EXTRA_PRESETS[i] : {name:"", qty:1, unit:"式", price:0};
+    (site().extras = site().extras||[]).push({id:uid(), ...p});
+    save(); renderEst(); return;
+  }
+});
+document.getElementById("btnPrint").addEventListener("click", ()=>{
+  document.getElementById("printArea").innerHTML = estDocHtml(site().estPlan);
+  window.print();
+});
+document.getElementById("btnCsv").addEventListener("click", ()=>{
+  const s = site();
+  const b = buildRows(s);
+  const q = v => `"${String(v).replace(/"/g,'""')}"`;
+  const lines = [["No","項目","仕様","数量","単位","単価","金額"].join(",")];
+  b.rows.forEach((r,i)=>lines.push([i+1, q(r.name), q(r.spec||""), r.unit==="式"?Math.round(r.qty):f1(r.qty), q(r.unit), r.price, r.amt].join(",")));
+  lines.push(["","","","","","小計",b.sub].join(","));
+  lines.push(["","","","","","消費税",b.tax].join(","));
+  lines.push(["","","","","","合計",b.total].join(","));
+  const blob = new Blob(["﻿"+lines.join("\r\n")], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `見積_${s.name||"物件"}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* ================= 設定 ================= */
+function renderSettings(){
+  const co = DB.settings.company;
+  ["name","addr","tel","person"].forEach(f=>{ document.getElementById("c-"+f).value = co[f]||""; });
+  const k = DB.settings.calc;
+  document.getElementById("k-loss").value = k.loss;
+  document.getElementById("k-effW").value = k.effW;
+  document.getElementById("k-tax").value = k.tax;
+  document.getElementById("k-habaki").value = k.habakiPrice;
+  document.getElementById("k-defH").value = k.defH;
+  document.querySelectorAll("#deductSeg button").forEach(b=>b.classList.toggle("on", b.dataset.v===k.deduct));
+  const ml = document.getElementById("matList");
+  ml.innerHTML = DB.settings.materials.map(m=>`
+    <div class="mat-item" data-mid="${m.id}">
+      <input class="nm" type="text" value="${esc(m.name)}" data-mf="name" data-mid="${m.id}">
+      <input class="pr" type="number" step="10" value="${m.price}" data-mf="price" data-mid="${m.id}">
+      <select class="un" data-mf="unit" data-mid="${m.id}">
+        <option value="m2" ${m.unit==="m2"?"selected":""}>円/㎡</option>
+        <option value="m" ${m.unit==="m"?"selected":""}>円/m</option>
+      </select>
+      ${m.unit==="m"?`<input class="wd" type="number" inputmode="decimal" step="0.01" placeholder="幅m" title="材料の有効幅(m)" value="${m.width||""}" data-mf="width" data-mid="${m.id}">`:""}
+      <button class="ghost" data-mdel="${m.id}">✕</button>
+    </div>`).join("");
+}
+document.querySelectorAll("[data-cf]").forEach(inp=>inp.addEventListener("input",()=>{
+  DB.settings.company[inp.dataset.cf]=inp.value; save();
+}));
+document.querySelectorAll("[data-kf]").forEach(inp=>inp.addEventListener("input",()=>{
+  DB.settings.calc[inp.dataset.kf]=parseFloat(inp.value)||0; save();
+}));
+document.getElementById("deductSeg").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-v]"); if(!b) return;
+  DB.settings.calc.deduct=b.dataset.v; save(); renderSettings();
+});
+document.getElementById("view-set").addEventListener("input", e=>{
+  const t = e.target;
+  if(t.dataset.mf){
+    const m = matById(t.dataset.mid); if(!m) return;
+    m[t.dataset.mf] = ["price","width"].includes(t.dataset.mf) ? (parseFloat(t.value)||0) : t.value;
+    save();
+  }
+});
+document.getElementById("view-set").addEventListener("change", e=>{
+  const t = e.target;
+  if(t.tagName==="SELECT" && t.dataset.mf){ const m=matById(t.dataset.mid); if(m){ m[t.dataset.mf]=t.value; save(); renderSettings(); } }
+});
+document.getElementById("view-set").addEventListener("click", e=>{
+  const del = e.target.closest("[data-mdel]");
+  if(del){
+    if(DB.settings.materials.length<=1){ alert("材料は1つ以上必要です"); return; }
+    DB.settings.materials = DB.settings.materials.filter(m=>m.id!==del.dataset.mdel);
+    save(); renderSettings(); return;
+  }
+});
+document.getElementById("btnAddMat").addEventListener("click", ()=>{
+  DB.settings.materials.push({id:uid(), name:"新しい材料", price:1000, unit:"m2"});
+  save(); renderSettings();
+});
+document.getElementById("btnExport").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(DB,null,1)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `クロス見積バックアップ_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("btnImport").addEventListener("click", ()=>document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      const d = JSON.parse(rd.result);
+      if(!d.sites) throw new Error("形式が違います");
+      if(!confirm("現在のデータを読み込んだ内容で上書きします。よろしいですか？")) return;
+      DB = d; save(); renderSiteSel(); showView("site");
+      alert("読み込みました");
+    }catch(err){ alert("読み込みに失敗しました：" + err.message); }
+  };
+  rd.readAsText(f);
+  e.target.value = "";
+});
+
+/* ================= 初期化 ================= */
+document.body.insertAdjacentHTML("beforeend", `<datalist id="roomNames">${ROOM_NAMES.map(n=>`<option value="${esc(n)}">`).join("")}</datalist>`);
+load();
+if(!DB.currentSiteId || !DB.sites.find(s=>s.id===DB.currentSiteId)) DB.currentSiteId = DB.sites[0].id;
+renderSiteSel();
+showView(site().rooms.length ? "rooms" : "site");
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
