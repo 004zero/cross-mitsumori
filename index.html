@@ -175,7 +175,7 @@ h3.grp{font-size:13px; color:var(--sub); margin:14px 0 6px;}
       <button class="sec" id="btnPlanZoomIn">＋拡大</button>
       <button class="sec" id="btnPlanZoomOut">－縮小</button>
     </div>
-    <p class="muted" style="margin:8px 0 0;">部屋をタップして選択→「⟳回転」で90度ずつ回ります。ドラッグで移動（グリッドに自動吸着）。この図は見積書に「参考間取り図」として添付できます（🧾見積タブ）。</p>
+    <p class="muted" style="margin:8px 0 0;">部屋を<b>ダブルクリック（ダブルタップ）で90度回転</b>。またはタップで選択→「⟳回転」でも回ります。ドラッグで移動（グリッドに自動吸着）。この図は見積書に「参考間取り図」として添付できます（🧾見積タブ）。</p>
   </div>
   <div id="planWrap"><svg id="planSvg" xmlns="http://www.w3.org/2000/svg"></svg></div>
 </section>
@@ -811,11 +811,22 @@ document.getElementById("btnPlanZoomOut").addEventListener("click", ()=>{ planSc
     const p = pt.matrixTransform(svg.getScreenCTM().inverse());
     return {x:p.x/planScale, y:p.y/planScale};
   }
+  let lastTap = {id:null, t:0};
   svg.addEventListener("pointerdown", ev=>{
     const g = ev.target.closest("[data-plan]");
-    if(!g){ planSel=null; renderPlan(); return; }
+    if(!g){ planSel=null; lastTap={id:null,t:0}; renderPlan(); return; }
     const r = site().rooms.find(r=>r.id===g.dataset.plan); if(!r) return;
     planSel = r.id;
+    // ダブルタップ/ダブルクリック判定（再描画でdblclickが発火しないため自前判定）
+    const now = performance.now();
+    if(lastTap.id===r.id && now-lastTap.t<350){
+      lastTap = {id:null, t:0};
+      r.rot = ((r.rot||0)+90)%360;
+      save(); renderPlan();
+      ev.preventDefault();
+      return;
+    }
+    lastTap = {id:r.id, t:now};
     const p = svgPoint(ev);
     drag = {r, dx:p.x-r.gx, dy:p.y-r.gy};
     svg.setPointerCapture(ev.pointerId);
