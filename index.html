@@ -54,7 +54,9 @@ button:active{opacity:.75;}
 .open-row .l2{margin-top:4px; color:var(--sub); font-size:12px;}
 .open-row input.sz{width:64px; padding:7px 4px; font-size:14px; text-align:right;}
 .open-row .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:bold; color:var(--txt);}
-.open-row .oarea{flex:1; text-align:right; color:var(--danger); font-weight:bold; font-size:13px;}
+.open-row .oarea{flex:1; text-align:right; color:var(--danger); font-weight:bold; font-size:13px; min-width:56px;}
+.open-row .l2{flex-wrap:wrap;}
+.open-row select.oside{width:auto; flex:none; padding:6px 4px; font-size:12px;}
 .side-chips{margin:2px 0 8px 26px;}
 .side-chips button.on{background:var(--main); color:#fff;}
 .stepper{display:flex; align-items:center; gap:2px;}
@@ -174,6 +176,9 @@ h3.grp{font-size:13px; color:var(--sub); margin:14px 0 6px;}
   <div class="card" style="margin-bottom:8px;">
     <div class="row">
       <button class="sec" id="btnRotate">⟳ 回転</button>
+      <button class="warn" id="btnPlanDel">🗑 削除</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
       <button class="sec" id="btnAutoLayout">🧲 自動整列</button>
       <button class="sec" id="btnPlanZoomIn">＋拡大</button>
       <button class="sec" id="btnPlanZoomOut">－縮小</button>
@@ -189,9 +194,11 @@ h3.grp{font-size:13px; color:var(--sub); margin:14px 0 6px;}
     <h2>🧾 見積書の設定</h2>
     <label class="fl">明細の形式</label>
     <div class="seg" id="estModeSeg">
-      <button data-mode="room">部屋ごとに明細</button>
-      <button data-mode="sum">材料ごとに集計</button>
+      <button data-mode="room">部屋ごと</button>
+      <button data-mode="face">面ごと</button>
+      <button data-mode="sum">材料ごと集計</button>
     </div>
+    <p class="muted" style="margin:6px 0 0;">「面ごと」は壁を面単位で拾います。開口部に面（間口①など）を指定すると、その面から控除されます。</p>
     <h3 class="grp">追加項目（諸経費・処分費など）</h3>
     <div id="extraList"></div>
     <div class="chips" id="extraChips"></div>
@@ -378,11 +385,17 @@ function roomCalc(r){
     perim = 2*(W+D); ceilA = W*D;
     if(r.shape==="L") ceilA = Math.max(0, ceilA - (+r.cutW||0)*(+r.cutD||0));
   }
-  let openA=0, doorW=0;
+  // 開口部の集計（面指定があれば面ごとにも拾う。面選択中は選択外の面の開口を除外）
+  const sidesActive = r.shape!=="custom" && Array.isArray(r.wallSides);
+  let openA=0, doorW=0, unassignedOpen=0;
+  const faceOpen=[0,0,0,0];
   (r.openings||[]).forEach(o=>{
-    const n=o.count||1;
-    openA += (+o.w||0)*(+o.h||0)*n;
+    const n=o.count||1, a=(+o.w||0)*(+o.h||0)*n;
+    const sd = (o.side==null || o.side<0 || o.side>3) ? null : +o.side;
+    if(sidesActive && sd!=null && !r.wallSides[sd]) return; // 施工しない面の開口は無視
+    openA += a;
     if(o.floor) doorW += (+o.w||0)*n;
+    if(sd!=null) faceOpen[sd]+=a; else unassignedOpen+=a;
   });
   const ded = st.deduct==="none"?0 : st.deduct==="half"?0.5 : 1;
   // 壁の面選択（四角/L型のみ）：wallSides=[間口①,間口②,奥行①,奥行②] / null=全面
@@ -398,7 +411,10 @@ function roomCalc(r){
   const fA = r.floor ? ceilA : 0;
   const habakiM = r.habaki ? Math.max(0, wallLen - doorW) : 0;
   const toM = a => a>0 ? a/(st.effW||0.9)*(1+ (st.loss||0)/100) : 0;
+  const faces = r.shape==="custom" ? null :
+    [W,W,D,D].map((len,i)=>({len, openA:faceOpen[i]}));
   return {perim, wallLen, sideCnt, sideSel, wallA, ceilA:cA, floorA:fA, ceilRaw:ceilA, openA, habakiM,
+    faces, unassignedOpen, ded,
     wallM:toM(wallA), ceilM:toM(cA), jo:ceilA/1.62};
 }
 function matAmount(matId, area){
@@ -425,11 +441,31 @@ function buildRows(s){
       rows.push({name:a.name, spec:`計 ${f1(v.area)}㎡`, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt});
     });
   }else{
+    const FACE_LABELS = ["間口①","間口②","奥行①","奥行②"];
     s.rooms.forEach(r=>{
       const c = roomCalc(r);
-      if(c.wallA>0){ const a=matAmount(r.wallMat,c.wallA);
-        const side = c.sideSel ? `（${c.sideCnt}面のみ）` : "";
-        rows.push({name:`${r.name}　壁${side}`, spec:a.name, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt}); }
+      if(c.wallA>0){
+        if(s.estMode==="face" && c.faces){
+          // 面ごとの数量拾い：面積＝面の長さ×天井高−その面の開口
+          const sel = Array.isArray(r.wallSides) ? r.wallSides : [true,true,true,true];
+          const H = +r.h||0;
+          c.faces.forEach((fc,i)=>{
+            if(!sel[i]) return;
+            const area = Math.max(0, fc.len*H - fc.openA*c.ded);
+            if(area<=0) return;
+            const a = matAmount(r.wallMat, area);
+            rows.push({name:`${r.name}　壁 ${FACE_LABELS[i]}（${f1(fc.len)}m）`, spec:a.name, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt});
+          });
+          if(c.unassignedOpen>0 && c.ded>0){
+            const a = matAmount(r.wallMat, -c.unassignedOpen*c.ded);
+            rows.push({name:`${r.name}　壁 開口控除（面未指定）`, spec:a.name, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt});
+          }
+        }else{
+          const a=matAmount(r.wallMat,c.wallA);
+          const side = c.sideSel ? `（${c.sideCnt}面のみ）` : "";
+          rows.push({name:`${r.name}　壁${side}`, spec:a.name, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt});
+        }
+      }
       if(c.ceilA>0){ const a=matAmount(r.ceilMat,c.ceilA);
         rows.push({name:`${r.name}　天井`, spec:a.name, qty:a.qty, unit:a.unit, price:a.price, amt:a.amt}); }
       if(c.floorA>0){ const a=matAmount(r.floorMat,c.floorA);
@@ -557,6 +593,10 @@ function renderRooms(){
         <div class="l2">
           幅<input class="sz" type="number" step="0.01" inputmode="decimal" value="${o.w}" data-rid="${r.id}" data-oid="${o.id}" data-of="w">m ×
           高さ<input class="sz" type="number" step="0.01" inputmode="decimal" value="${o.h}" data-rid="${r.id}" data-oid="${o.id}" data-of="h">m
+          ${r.shape!=="custom"?`<select class="oside" data-rid="${r.id}" data-oid="${o.id}" data-of="side" title="この開口がある面">
+            <option value="">面-</option>
+            ${["間口①","間口②","奥行①","奥行②"].map((lb,i)=>`<option value="${i}" ${o.side===i?"selected":""}>${lb}</option>`).join("")}
+          </select>`:""}
           <span class="oarea" id="oarea-${o.id}">${oareaText(o)}</span>
         </div>
       </div>`).join("");
@@ -675,8 +715,16 @@ document.getElementById("view-rooms").addEventListener("input", e=>{
 });
 document.getElementById("view-rooms").addEventListener("change", e=>{
   const t = e.target;
-  if(t.tagName==="SELECT" && t.dataset.rf){
-    const r = site().rooms.find(r=>r.id===t.dataset.rid); if(!r) return;
+  if(t.tagName!=="SELECT") return;
+  const r = site().rooms.find(r=>r.id===t.dataset.rid); if(!r) return;
+  if(t.dataset.of==="side"){ // 開口部の面指定
+    const o = r.openings.find(o=>o.id===t.dataset.oid); if(!o) return;
+    o.side = t.value==="" ? null : +t.value;
+    site().updatedAt=Date.now(); save();
+    const st = document.getElementById("stats-"+r.id);
+    if(st) st.innerHTML = roomStatsHtml(r);
+    updateTotalBar();
+  }else if(t.dataset.rf){
     r[t.dataset.rf]=t.value; site().updatedAt=Date.now(); save(); updateTotalBar();
   }
 });
@@ -800,6 +848,15 @@ document.getElementById("btnRotate").addEventListener("click", ()=>{
   if(!r){ alert("回転したい部屋を先にタップで選択してください"); return; }
   r.rot = ((r.rot||0)+90)%360;
   save(); renderPlan();
+});
+document.getElementById("btnPlanDel").addEventListener("click", ()=>{
+  const s = site();
+  const r = s.rooms.find(r=>r.id===planSel);
+  if(!r){ alert("削除したい部屋を先にタップで選択してください"); return; }
+  if(!confirm(`「${r.name}」を削除しますか？（部屋の入力内容ごと消えます）`)) return;
+  s.rooms = s.rooms.filter(x=>x.id!==r.id);
+  planSel = null;
+  s.updatedAt = Date.now(); save(); renderPlan();
 });
 document.getElementById("btnAutoLayout").addEventListener("click", ()=>{
   site().rooms.forEach(r=>{ r.gx=null; r.gy=null; }); save(); renderPlan();
